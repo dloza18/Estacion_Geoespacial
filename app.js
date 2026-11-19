@@ -1,15 +1,16 @@
 /**
- * Estación Geoespacial de Reconocimiento - Frontend SPA (Lógica Principal)
+ * Estación Geoespacial de Reconocimiento - Frontend SPA
  * Universidad de Colima - Entornos Inteligentes
  */
 
 (function () {
   'use strict';
 
+  // State Store
   const state = {
-    user: null,
+    user: null, // { username, role }
     activeTab: 'tab-inicio',
-    controlMode: 'manual',
+    controlMode: 'manual', // 'manual' | 'auto'
     currentPwm: 75,
     liveTelemetry: {
       temp: 24.5,
@@ -22,16 +23,21 @@
     targetCoords: null,
     dbRecords: [
       { id: 'REC-1001', time: '2026-11-05 10:14:02', temp: 24.5, press: 1013.25, lat: 19.2433, lng: -103.7247, mode: 'AUTOMÁTICO' },
-      { id: 'REC-1002', time: '2026-11-05 10:14:03', temp: 24.6, press: 1013.22, lat: 19.2435, lng: -103.7245, mode: 'AUTOMÁTICO' }
+      { id: 'REC-1002', time: '2026-11-05 10:14:03', temp: 24.6, press: 1013.22, lat: 19.2435, lng: -103.7245, mode: 'AUTOMÁTICO' },
+      { id: 'REC-1003', time: '2026-11-05 10:14:04', temp: 24.7, press: 1013.20, lat: 19.2438, lng: -103.7242, mode: 'AUTOMÁTICO' },
+      { id: 'REC-1004', time: '2026-11-05 10:14:05', temp: 24.6, press: 1013.24, lat: 19.2440, lng: -103.7240, mode: 'MANUAL' },
+      { id: 'REC-1005', time: '2026-11-05 10:14:06', temp: 24.8, press: 1013.18, lat: 19.2443, lng: -103.7238, mode: 'MANUAL' }
     ]
   };
 
+  // Maps and Charts references
   let liveMap, liveMarker, livePolyline;
   let autoMap, autoTargetMarker;
   let sdMap, sdPolyline;
   let liveChart, sdChart;
   let liveInterval = null;
 
+  // Initializer
   document.addEventListener('DOMContentLoaded', () => {
     checkSavedSession();
     startClock();
@@ -39,6 +45,7 @@
     initKeyboardListeners();
   });
 
+  // Session Management
   function checkSavedSession() {
     const saved = localStorage.getItem('geo_session');
     if (saved) {
@@ -54,10 +61,12 @@
   function handleLogin() {
     const userIn = document.getElementById('username').value.trim();
     const roleIn = document.querySelector('input[name="authRole"]:checked').value;
+
     if (!userIn) return showToast('Ingrese un nombre de usuario', 'error');
 
     state.user = { username: userIn, role: roleIn };
     localStorage.setItem('geo_session', JSON.stringify(state.user));
+    
     showToast(`Bienvenido ${userIn} (${roleIn.toUpperCase()})`, 'success');
     showMainApp();
   }
@@ -88,8 +97,7 @@
     renderDbTable();
     initMapsAndCharts();
     startLiveSimulation();
-    
-    // Inicializar el servicio MQTT externo si está disponible
+
     if (window.mqttService && typeof window.mqttService.init === 'function') {
       window.mqttService.init();
     }
@@ -104,6 +112,7 @@
 
   function switchTab(tabId) {
     state.activeTab = tabId;
+    
     ['tab-inicio', 'tab-monitoreo', 'tab-base-datos', 'tab-control'].forEach(id => {
       document.getElementById(id).classList.add('hidden');
       const navBtn = document.getElementById(`nav-${id}`);
@@ -135,24 +144,40 @@
     }, 200);
   }
 
+  // Maps and Charts Initializers (Usando OpenStreetMap estándar con filtro o teselas libres)
   function initMapsAndCharts() {
     const colimaCoords = [19.2433, -103.7247];
 
     if (!liveMap) {
       liveMap = L.map('liveMap').setView(colimaCoords, 16);
-      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19 }).addTo(liveMap);
-      liveMarker = L.marker(colimaCoords).addTo(liveMap).bindPopup('<b>Rover ESP32</b>');
+      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        maxZoom: 19,
+        attribution: '&copy; OpenStreetMap contributors'
+      }).addTo(liveMap);
+
+      liveMarker = L.marker(colimaCoords).addTo(liveMap)
+        .bindPopup('<b>Rover Telemetría ESP32</b><br>Estado: En Línea');
       livePolyline = L.polyline([], { color: '#10b981', weight: 4 }).addTo(liveMap);
     }
 
     if (!autoMap) {
       autoMap = L.map('autoMap').setView(colimaCoords, 16);
-      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19 }).addTo(autoMap);
+      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        maxZoom: 19,
+        attribution: '&copy; OpenStreetMap contributors'
+      }).addTo(autoMap);
+
       autoMap.on('click', (e) => {
         state.targetCoords = e.latlng;
         if (autoTargetMarker) autoMap.removeLayer(autoTargetMarker);
-        autoTargetMarker = L.marker(e.latlng).addTo(autoMap).bindPopup('Destino Fijado').openPopup();
-        showToast('Waypoint seleccionado', 'info');
+        autoTargetMarker = L.marker(e.latlng).addTo(autoMap)
+          .bindPopup(`<b>Objetivo Fijado</b><br>Lat: ${e.latlng.lat.toFixed(5)}<br>Lng: ${e.latlng.lng.toFixed(5)}`).openPopup();
+        
+        const targetText = document.getElementById('targetCoordsText');
+        if (targetText) {
+          targetText.textContent = `${e.latlng.lat.toFixed(4)}, ${e.latlng.lng.toFixed(4)}`;
+        }
+        showToast('Waypoint seleccionado en mapa', 'info');
       });
     }
 
@@ -163,21 +188,46 @@
         data: {
           labels: [],
           datasets: [
-            { label: 'Temp (°C)', data: [], borderColor: '#f43f5e', tension: 0.3 },
-            { label: 'Presión (hPa)', data: [], borderColor: '#6366f1', tension: 0.3 }
+            {
+              label: 'Temperatura (°C)',
+              data: [],
+              borderColor: '#f43f5e',
+              backgroundColor: 'rgba(244, 63, 94, 0.1)',
+              yAxisID: 'yTemp',
+              tension: 0.3
+            },
+            {
+              label: 'Presión (hPa)',
+              data: [],
+              borderColor: '#6366f1',
+              backgroundColor: 'rgba(99, 102, 241, 0.1)',
+              yAxisID: 'yPress',
+              tension: 0.3
+            }
           ]
         },
-        options: { responsive: true, maintainAspectRatio: false }
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          scales: {
+            x: { grid: { color: '#1e293b' }, ticks: { color: '#94a3b8' } },
+            yTemp: { type: 'linear', position: 'left', grid: { color: '#1e293b' }, ticks: { color: '#f43f5e' } },
+            yPress: { type: 'linear', position: 'right', grid: { drawOnChartArea: false }, ticks: { color: '#6366f1' } }
+          },
+          plugins: { legend: { labels: { color: '#cbd5e1' } } }
+        }
       });
     }
   }
 
   function startLiveSimulation() {
     if (liveInterval) clearInterval(liveInterval);
+
     liveInterval = setInterval(() => {
       state.liveTelemetry.temp = +(state.liveTelemetry.temp + (Math.random() * 0.4 - 0.2)).toFixed(2);
       state.liveTelemetry.pressure = +(state.liveTelemetry.pressure + (Math.random() * 0.2 - 0.1)).toFixed(2);
       state.liveTelemetry.alt = +(44330 * (1 - Math.pow(state.liveTelemetry.pressure / 1013.25, 1 / 5.255))).toFixed(1);
+      
       state.liveTelemetry.lat += (Math.random() * 0.0001 - 0.00005);
       state.liveTelemetry.lng += (Math.random() * 0.0001 - 0.00005);
 
@@ -208,13 +258,18 @@
   }
 
   function recenterLiveMap() {
-    if (liveMap && liveMarker) liveMap.setView(liveMarker.getLatLng(), 17);
+    if (liveMap && liveMarker) {
+      liveMap.setView(liveMarker.getLatLng(), 17);
+      showToast('Mapa centrado en robot', 'info');
+    }
   }
 
+  // CRUD Table Operations
   function renderDbTable(records = state.dbRecords) {
     const tbody = document.getElementById('dbTableBody');
     if (!tbody) return;
     tbody.innerHTML = '';
+
     records.forEach(rec => {
       const tr = document.createElement('tr');
       tr.className = 'hover:bg-slate-950/50 transition';
@@ -224,55 +279,266 @@
         <td class="p-3 text-white">${rec.temp} °C</td>
         <td class="p-3 text-white">${rec.press} hPa</td>
         <td class="p-3 text-slate-300">${rec.lat.toFixed(4)}, ${rec.lng.toFixed(4)}</td>
-        <td class="p-3"><span class="px-2 py-0.5 text-[10px] rounded font-bold bg-amber-500/10 text-amber-400">${rec.mode}</span></td>
-        <td class="p-3 text-right"><button onclick="window.app.deleteRecord('${rec.id}')" class="admin-only text-rose-400"><i class="fa-solid fa-trash"></i></button></td>
+        <td class="p-3"><span class="px-2 py-0.5 text-[10px] rounded font-bold ${rec.mode === 'AUTOMÁTICO' ? 'bg-cyan-500/10 text-cyan-400 border border-cyan-500/20' : 'bg-amber-500/10 text-amber-400 border border-amber-500/20'}">${rec.mode}</span></td>
+        <td class="p-3 text-right space-x-2">
+          <button onclick="window.app.openEditModal('${rec.id}')" class="admin-only text-slate-400 hover:text-emerald-400 p-1"><i class="fa-solid fa-pen"></i></button>
+          <button onclick="window.app.deleteRecord('${rec.id}')" class="admin-only text-slate-400 hover:text-rose-400 p-1"><i class="fa-solid fa-trash"></i></button>
+        </td>
       `;
       tbody.appendChild(tr);
     });
+
     if (state.user && state.user.role === 'user') {
       document.querySelectorAll('.admin-only').forEach(el => el.classList.add('hidden'));
+    }
+
+    const pagInfo = document.getElementById('dbPaginationInfo');
+    if (pagInfo) {
+      pagInfo.textContent = `Mostrando ${records.length} de ${records.length} registros`;
     }
   }
 
   function filterTable() {
     const q = document.getElementById('dbSearch').value.toLowerCase();
     const mode = document.getElementById('dbFilterMode').value;
-    const filtered = state.dbRecords.filter(r => (r.id.toLowerCase().includes(q) || r.temp.toString().includes(q)) && (mode === 'ALL' || r.mode === mode));
+
+    const filtered = state.dbRecords.filter(r => {
+      const matchQ = r.id.toLowerCase().includes(q) || 
+                     r.temp.toString().includes(q) || 
+                     r.press.toString().includes(q);
+      const matchMode = mode === 'ALL' || r.mode === mode;
+      return matchQ && matchMode;
+    });
+
     renderDbTable(filtered);
   }
 
-  // Función principal de movimiento que interactúa con la BD/SD y delega el envío a MQTT
-  function sendDriveCommand(cmd) {
-    if (!state.user || state.user.role !== 'admin') {
-      return showToast('Acción denegada: Privilegios insuficientes', 'error');
+  function openCreateModal() {
+    document.getElementById('modalTitle').textContent = 'Crear Registro de Telemetría';
+    document.getElementById('recordId').value = '';
+    document.getElementById('inputTemp').value = state.liveTelemetry.temp;
+    document.getElementById('inputPress').value = state.liveTelemetry.pressure;
+    const inputLat = document.getElementById('inputLat');
+    const inputLng = document.getElementById('inputLng');
+    const inputMode = document.getElementById('inputMode');
+    if (inputLat) inputLat.value = state.liveTelemetry.lat.toFixed(5);
+    if (inputLng) inputLng.value = state.liveTelemetry.lng.toFixed(5);
+    if (inputMode) inputMode.value = 'MANUAL';
+    document.getElementById('crudModal').classList.remove('hidden');
+  }
+
+  function openEditModal(id) {
+    const rec = state.dbRecords.find(r => r.id === id);
+    if (!rec) return;
+
+    document.getElementById('modalTitle').textContent = `Editar Registro ${id}`;
+    document.getElementById('recordId').value = rec.id;
+    document.getElementById('inputTemp').value = rec.temp;
+    document.getElementById('inputPress').value = rec.press;
+    const inputLat = document.getElementById('inputLat');
+    const inputLng = document.getElementById('inputLng');
+    const inputMode = document.getElementById('inputMode');
+    if (inputLat) inputLat.value = rec.lat;
+    if (inputLng) inputLng.value = rec.lng;
+    if (inputMode) inputMode.value = rec.mode;
+    document.getElementById('crudModal').classList.remove('hidden');
+  }
+
+  function closeCrudModal() {
+    document.getElementById('crudModal').classList.add('hidden');
+  }
+
+  function saveCrudRecord() {
+    const id = document.getElementById('recordId').value;
+    const temp = parseFloat(document.getElementById('inputTemp').value);
+    const press = parseFloat(document.getElementById('inputPress').value);
+    const inputLat = document.getElementById('inputLat');
+    const inputLng = document.getElementById('inputLng');
+    const inputMode = document.getElementById('inputMode');
+    const lat = inputLat ? parseFloat(inputLat.value) : state.liveTelemetry.lat;
+    const lng = inputLng ? parseFloat(inputLng.value) : state.liveTelemetry.lng;
+    const mode = inputMode ? inputMode.value : 'MANUAL';
+
+    if (id) {
+      const rec = state.dbRecords.find(r => r.id === id);
+      if (rec) {
+        rec.temp = temp; rec.press = press; rec.lat = lat; rec.lng = lng; rec.mode = mode;
+        showToast(`Registro ${id} actualizado`, 'success');
+      }
+    } else {
+      const newRec = {
+        id: `REC-${Math.floor(1000 + Math.random() * 9000)}`,
+        time: new Date().toISOString().replace('T', ' ').substring(0, 19),
+        temp, press, lat, lng, mode
+      };
+      state.dbRecords.unshift(newRec);
+      showToast('Nuevo registro añadido a la BD', 'success');
     }
 
-    const payload = {
+    closeCrudModal();
+    renderDbTable();
+  }
+
+  function deleteRecord(id) {
+    if (state.user.role !== 'admin') {
+      return showToast('Acción denegada: Privilegios insuficientes', 'error');
+    }
+    state.dbRecords = state.dbRecords.filter(r => r.id !== id);
+    renderDbTable();
+    showToast(`Registro ${id} eliminado`, 'info');
+  }
+
+  function exportData(type) {
+    let content = '', filename = `telemetry_export.${type}`, mime = '';
+    if (type === 'json') {
+      content = JSON.stringify(state.dbRecords, null, 2);
+      mime = 'application/json';
+    } else {
+      content = 'id,time,temp,press,lat,lng,mode\n' + 
+        state.dbRecords.map(r => `${r.id},${r.time},${r.temp},${r.press},${r.lat},${r.lng},${r.mode}`).join('\n');
+      mime = 'text/csv';
+    }
+
+    const blob = new Blob([content], { type: mime });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = filename; a.click();
+    URL.revokeObjectURL(url);
+    showToast(`Archivo ${type.toUpperCase()} exportado`, 'success');
+  }
+
+  function handleSDFileUpload(event) {
+    const file = event.target.files[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = function(e) {
+      parseAndRenderSDData(file.name, e.target.result);
+    };
+    reader.readAsText(file);
+  }
+
+  function parseAndRenderSDData(fileName, csvText) {
+    const lines = csvText.trim().split('\n');
+    const parsed = [];
+
+    lines.forEach((line, idx) => {
+      if (idx === 0 && line.toLowerCase().includes('temp')) return;
+      const parts = line.split(',');
+      if (parts.length >= 5) {
+        parsed.push({
+          time: parts[0] || `T-${idx}`,
+          temp: parseFloat(parts[1]) || 24.0,
+          press: parseFloat(parts[2]) || 1013.0,
+          lat: parseFloat(parts[3]) || (19.2433 + (idx * 0.00005)),
+          lng: parseFloat(parts[4]) || (-103.7247 + (idx * 0.00005))
+        });
+      }
+    });
+
+    if (parsed.length === 0) {
+      return showToast('Archivo CSV inválido o vacío', 'error');
+    }
+
+    document.getElementById('sdAnalysisContainer').classList.remove('hidden');
+    document.getElementById('sdFileName').textContent = fileName;
+    document.getElementById('sdFileStats').textContent = `${parsed.length} Puntos procesados correctamente.`;
+
+    setTimeout(() => {
+      if (!sdMap) {
+        sdMap = L.map('sdMap').setView([parsed[0].lat, parsed[0].lng], 16);
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19 }).addTo(sdMap);
+      }
+      if (sdPolyline) sdMap.removeLayer(sdPolyline);
+
+      const latlngs = parsed.map(p => [p.lat, p.lng]);
+      sdPolyline = L.polyline(latlngs, { color: '#f59e0b', weight: 4 }).addTo(sdMap);
+      sdMap.fitBounds(sdPolyline.getBounds());
+
+      const ctx = document.getElementById('sdChart').getContext('2d');
+      if (sdChart) sdChart.destroy();
+      sdChart = new Chart(ctx, {
+        type: 'line',
+        data: {
+          labels: parsed.map(p => p.time),
+          datasets: [{
+            label: 'Temperatura SD (°C)',
+            data: parsed.map(p => p.temp),
+            borderColor: '#f59e0b',
+            tension: 0.2
+          }]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          scales: {
+            x: { ticks: { color: '#94a3b8' } },
+            y: { ticks: { color: '#94a3b8' } }
+          }
+        }
+      });
+    }, 200);
+
+    showToast('Bitácora MicroSD reconstruida exitosamente', 'success');
+  }
+
+  function setControlMode(mode) {
+    state.controlMode = mode;
+    const btnMan = document.getElementById('btnModeManual');
+    const btnAuto = document.getElementById('btnModeAuto');
+    const viewMan = document.getElementById('viewManualControl');
+    const viewAuto = document.getElementById('viewAutoControl');
+
+    if (mode === 'manual') {
+      btnMan.className = 'px-5 py-2 rounded-lg text-xs font-bold transition flex items-center space-x-2 bg-emerald-600 text-white';
+      btnAuto.className = 'px-5 py-2 rounded-lg text-xs font-bold transition flex items-center space-x-2 text-slate-400 hover:text-white';
+      viewMan.classList.remove('hidden');
+      viewAuto.classList.add('hidden');
+    } else {
+      btnAuto.className = 'px-5 py-2 rounded-lg text-xs font-bold transition flex items-center space-x-2 bg-emerald-600 text-white';
+      btnMan.className = 'px-5 py-2 rounded-lg text-xs font-bold transition flex items-center space-x-2 text-slate-400 hover:text-white';
+      viewAuto.classList.remove('hidden');
+      viewMan.classList.add('hidden');
+      setTimeout(() => { if (autoMap) autoMap.invalidateSize(); }, 200);
+    }
+
+    showToast(`Modo cambiado a: ${mode.toUpperCase()}`, 'info');
+  }
+
+  // Envío de comandos mediante MQTT (servicio externo si existe) y registro automático en BD / SD
+  function sendDriveCommand(cmd) {
+    if (!state.user || state.user.role !== 'admin') {
+      return showToast('Acción denegada: Privilegio exclusivo de Administrador', 'error');
+    }
+
+    const mqttPayload = {
       device: "ESP32_ROVER",
+      client_id: `web_operator_${state.user.username}`,
       command: cmd,
       pwm: state.currentPwm,
       timestamp: new Date().toISOString()
     };
 
-    // 1. Delegar publicación al servicio MQTT independiente si está activo
     if (window.mqttService && typeof window.mqttService.publish === 'function') {
-      window.mqttService.publish(payload);
+      window.mqttService.publish(mqttPayload);
     } else {
-      showToast(`Comando [${cmd}] ejecutado (Modo local sin MQTT)`, 'success');
+      console.log("📤 [MQTT Publish]:", JSON.stringify(mqttPayload));
     }
 
-    // 2. Registro automático en la BD simulada y Datalogger SD
-    const newRec = {
+    const newDbRecord = {
       id: `REC-${Math.floor(1000 + Math.random() * 9000)}`,
-      time: payload.timestamp.replace('T', ' ').substring(0, 19),
+      time: mqttPayload.timestamp.replace('T', ' ').substring(0, 19),
       temp: state.liveTelemetry.temp,
       press: state.liveTelemetry.pressure,
       lat: state.liveTelemetry.lat,
       lng: state.liveTelemetry.lng,
       mode: `CMD_${cmd}`
     };
-    state.dbRecords.unshift(newRec);
+
+    state.dbRecords.unshift(newDbRecord);
     renderDbTable();
+
+    showToast(`Comando [${cmd}] enviado y guardado en SD/BD`, 'success');
   }
 
   function updatePWM(val) {
@@ -280,19 +546,46 @@
     document.getElementById('pwmValue').textContent = `${val}%`;
   }
 
+  function toggleActuator(type) {
+    if (!state.user || state.user.role !== 'admin') {
+      return showToast('Acción denegada: Privilegio exclusivo de Administrador', 'error');
+    }
+    showToast(`Actuador ${type.toUpperCase()} conmutado`, 'info');
+  }
+
+  function sendAutonomousMission() {
+    if (!state.user || state.user.role !== 'admin') {
+      return showToast('Acción denegada: Solo administradores pueden lanzar misiones', 'error');
+    }
+    if (!state.targetCoords) {
+      return showToast('Por favor seleccione un punto de destino en el mapa', 'error');
+    }
+    showToast(`Misión Autónoma Iniciada -> Lat: ${state.targetCoords.lat.toFixed(5)}, Lng: ${state.targetCoords.lng.toFixed(5)}`, 'success');
+  }
+
+  // Escuchador de teclas W, A, S, D para control direccional rápido
   function initKeyboardListeners() {
     window.addEventListener('keydown', (e) => {
       if (!state.user || state.activeTab !== 'tab-control' || state.controlMode !== 'manual') return;
-      const key = e.key.toUpperCase();
-      if (['W', 'A', 'S', 'D', 'ARROWUP', 'ARROWDOWN', 'ARROWLEFT', 'ARROWRIGHT'].includes(key)) e.preventDefault();
 
-      if (key === 'W' || key === 'ARROWUP') sendDriveCommand('FORWARD');
-      else if (key === 'S' || key === 'ARROWDOWN') sendDriveCommand('BACKWARD');
-      else if (key === 'A' || key === 'ARROWLEFT') sendDriveCommand('LEFT');
-      else if (key === 'D' || key === 'ARROWRIGHT') sendDriveCommand('RIGHT');
+      const key = e.key.toUpperCase();
+      if (['W', 'A', 'S', 'D', 'ARROWUP', 'ARROWDOWN', 'ARROWLEFT', 'ARROWRIGHT'].includes(key)) {
+        e.preventDefault();
+      }
+
+      if (key === 'W' || key === 'ARROWUP') {
+        sendDriveCommand('FORWARD');
+      } else if (key === 'S' || key === 'ARROWDOWN') {
+        sendDriveCommand('BACKWARD');
+      } else if (key === 'A' || key === 'ARROWLEFT') {
+        sendDriveCommand('LEFT');
+      } else if (key === 'D' || key === 'ARROWRIGHT') {
+        sendDriveCommand('RIGHT');
+      }
     });
   }
 
+  // HTML5 Canvas Virtual Joystick
   function initJoystick() {
     const canvas = document.getElementById('joystickCanvas');
     if (!canvas) return;
@@ -347,10 +640,10 @@
 
       const normX = +((stick.x - center.x) / maxRadius).toFixed(2);
       const normY = +(-(stick.y - center.y) / maxRadius).toFixed(2);
-      const joyX = document.getElementById('joyX');
-      const joyY = document.getElementById('joyY');
-      if (joyX) joyX.textContent = normX;
-      if (joyY) joyY.textContent = normY;
+      const joyXEl = document.getElementById('joyX');
+      const joyYEl = document.getElementById('joyY');
+      if (joyXEl) joyXEl.textContent = normX;
+      if (joyYEl) joyYEl.textContent = normY;
 
       if (state.user && state.activeTab === 'tab-control' && state.controlMode === 'manual') {
         let dir = '';
@@ -372,10 +665,10 @@
       dragging = false;
       stick = { x: center.x, y: center.y };
       draw();
-      const joyX = document.getElementById('joyX');
-      const joyY = document.getElementById('joyY');
-      if (joyX) joyX.textContent = '0.00';
-      if (joyY) joyY.textContent = '0.00';
+      const joyXEl = document.getElementById('joyX');
+      const joyYEl = document.getElementById('joyY');
+      if (joyXEl) joyXEl.textContent = '0.00';
+      if (joyYEl) joyYEl.textContent = '0.00';
       if (activeDir) {
         activeDir = '';
         sendDriveCommand('STOP');
@@ -393,80 +686,57 @@
     draw();
   }
 
-  function handleSDFileUpload(event) {
-    const file = event.target.files[0];
-    if (!file) return;
-    const reader = new FileReader();
-    reader.onload = function(e) {
-      const lines = e.target.result.trim().split('\n');
-      const parsed = lines.slice(1).map(l => {
-        const p = l.split(',');
-        return { time: p[0], temp: parseFloat(p[1]), lat: parseFloat(p[3]), lng: parseFloat(p[4]) };
-      });
-      document.getElementById('sdAnalysisContainer').classList.remove('hidden');
-      document.getElementById('sdFileName').textContent = file.name;
-      document.getElementById('sdFileStats').textContent = `${parsed.length} puntos procesados`;
-      
-      setTimeout(() => {
-        if (!sdMap) {
-          sdMap = L.map('sdMap').setView([parsed[0].lat, parsed[0].lng], 16);
-          L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(sdMap);
-        }
-        if (sdPolyline) sdMap.removeLayer(sdPolyline);
-        sdPolyline = L.polyline(parsed.map(p => [p.lat, p.lng]), { color: '#f59e0b', weight: 4 }).addTo(sdMap);
-        sdMap.fitBounds(sdPolyline.getBounds());
-      }, 200);
-      showToast('MicroSD procesada con éxito', 'success');
-    };
-    reader.readAsText(file);
-  }
-
-  function exportData(type) {
-    const content = type === 'json' ? JSON.stringify(state.dbRecords, null, 2) : 'id,time,temp,press,lat,lng,mode\n' + state.dbRecords.map(r => `${r.id},${r.time},${r.temp},${r.press},${r.lat},${r.lng},${r.mode}`).join('\n');
-    const blob = new Blob([content], { type: type === 'json' ? 'application/json' : 'text/csv' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a'); a.href = url; a.download = `telemetry.${type}`; a.click();
-    showToast(`Exportado a ${type.toUpperCase()}`, 'success');
-  }
-
-  function deleteRecord(id) {
-    if (state.user.role !== 'admin') return showToast('Acceso denegado', 'error');
-    state.dbRecords = state.dbRecords.filter(r => r.id !== id);
-    renderDbTable();
-    showToast(`Registro ${id} eliminado`, 'info');
-  }
-
   function showToast(message, type = 'info') {
     const container = document.getElementById('toastContainer');
     if (!container) return;
+
     const toast = document.createElement('div');
-    const colors = { success: 'bg-emerald-950 border-emerald-500/40 text-emerald-200', error: 'bg-rose-950 border-rose-500/40 text-rose-200', info: 'bg-slate-900 border-slate-700 text-slate-200' };
+    const colors = {
+      success: 'bg-emerald-950 border-emerald-500/40 text-emerald-200',
+      error: 'bg-rose-950 border-rose-500/40 text-rose-200',
+      info: 'bg-slate-900 border-slate-700 text-slate-200'
+    };
+
+    const icons = {
+      success: '<i class="fa-solid fa-circle-check text-emerald-400"></i>',
+      error: '<i class="fa-solid fa-triangle-exclamation text-rose-400"></i>',
+      info: '<i class="fa-solid fa-circle-info text-cyan-400"></i>'
+    };
+
     toast.className = `toast-enter pointer-events-auto border rounded-xl px-4 py-3 text-xs font-medium shadow-xl flex items-center space-x-3 max-w-sm ${colors[type]}`;
-    toast.innerHTML = `<span>${message}</span>`;
+    toast.innerHTML = `
+      ${icons[type]}
+      <span class="flex-1">${message}</span>
+    `;
+
     container.appendChild(toast);
-    setTimeout(() => { toast.remove(); }, 3500);
+
+    setTimeout(() => {
+      toast.style.opacity = '0';
+      toast.style.transform = 'translateX(100%)';
+      toast.style.transition = 'all 0.3s ease';
+      setTimeout(() => toast.remove(), 300);
+    }, 3500);
   }
 
   window.app = {
-    handleLogin, handleLogout, switchTab, recenterLiveMap, filterTable,
-    openCreateModal: () => document.getElementById('crudModal').classList.remove('hidden'),
-    closeCrudModal: () => document.getElementById('crudModal').classList.add('hidden'),
-    saveCrudRecord: () => {
-      state.dbRecords.unshift({
-        id: `REC-${Math.floor(1000 + Math.random() * 9000)}`,
-        time: new Date().toISOString().replace('T', ' ').substring(0, 19),
-        temp: parseFloat(document.getElementById('inputTemp').value),
-        press: parseFloat(document.getElementById('inputPress').value),
-        lat: state.liveTelemetry.lat, lng: state.liveTelemetry.lng, mode: 'MANUAL'
-      });
-      document.getElementById('crudModal').classList.add('hidden');
-      renderDbTable();
-      showToast('Creado con éxito', 'success');
-    },
-    deleteRecord, exportData, handleSDFileUpload,
-    setControlMode: (m) => { state.controlMode = m; showToast(`Modo ${m}`, 'info'); },
-    sendDriveCommand, updatePWM,
-    sendAutonomousMission: () => showToast('Misión autónoma enviada al rover', 'success')
+    handleLogin,
+    handleLogout,
+    switchTab,
+    recenterLiveMap,
+    filterTable,
+    openCreateModal,
+    openEditModal,
+    closeCrudModal,
+    saveCrudRecord,
+    deleteRecord,
+    exportData,
+    handleSDFileUpload,
+    setControlMode,
+    sendDriveCommand,
+    updatePWM,
+    toggleActuator,
+    sendAutonomousMission
   };
 
 })();
