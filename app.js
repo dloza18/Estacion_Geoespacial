@@ -297,37 +297,31 @@
     const canvas = document.getElementById('joystickCanvas');
     if (!canvas) return;
     const ctx = canvas.getContext('2d');
+    
     let dragging = false;
-    let lastCmd = null;
+    let activeDir = '';
     const center = { x: canvas.width / 2, y: canvas.height / 2 };
     const maxRadius = 70;
-    const deadzone = 0.35;
     let stick = { x: center.x, y: center.y };
 
     function draw() {
       ctx.clearRect(0, 0, canvas.width, canvas.height);
-      ctx.beginPath(); ctx.arc(center.x, center.y, maxRadius, 0, Math.PI * 2);
-      ctx.fillStyle = 'rgba(30, 41, 59, 0.5)'; ctx.fill(); ctx.stroke();
-      ctx.beginPath(); ctx.arc(stick.x, stick.y, 25, 0, Math.PI * 2);
-      ctx.fillStyle = '#10b981'; ctx.fill();
-    }
 
-    function emitJoystickCommand(normX, normY) {
-      if (!state.user || state.activeTab !== 'tab-control' || state.controlMode !== 'manual') return;
+      ctx.beginPath();
+      ctx.arc(center.x, center.y, maxRadius, 0, Math.PI * 2);
+      ctx.fillStyle = 'rgba(30, 41, 59, 0.5)';
+      ctx.fill();
+      ctx.strokeStyle = '#334155';
+      ctx.lineWidth = 2;
+      ctx.stroke();
 
-      let cmd = null;
-      if (Math.hypot(normX, normY) >= deadzone) {
-        if (Math.abs(normY) >= Math.abs(normX)) {
-          cmd = normY > 0 ? 'FORWARD' : 'BACKWARD';
-        } else {
-          cmd = normX > 0 ? 'RIGHT' : 'LEFT';
-        }
-      }
-
-      if (cmd && cmd !== lastCmd) {
-        lastCmd = cmd;
-        sendDriveCommand(cmd);
-      }
+      ctx.beginPath();
+      ctx.arc(stick.x, stick.y, 25, 0, Math.PI * 2);
+      ctx.fillStyle = '#10b981';
+      ctx.fill();
+      ctx.strokeStyle = '#34d399';
+      ctx.lineWidth = 3;
+      ctx.stroke();
     }
 
     function moveStick(evt) {
@@ -353,25 +347,37 @@
 
       const normX = +((stick.x - center.x) / maxRadius).toFixed(2);
       const normY = +(-(stick.y - center.y) / maxRadius).toFixed(2);
-      const joyXEl = document.getElementById('joyX');
-      const joyYEl = document.getElementById('joyY');
-      if (joyXEl) joyXEl.textContent = normX;
-      if (joyYEl) joyYEl.textContent = normY;
+      const joyX = document.getElementById('joyX');
+      const joyY = document.getElementById('joyY');
+      if (joyX) joyX.textContent = normX;
+      if (joyY) joyY.textContent = normY;
 
-      emitJoystickCommand(normX, normY);
+      if (state.user && state.activeTab === 'tab-control' && state.controlMode === 'manual') {
+        let dir = '';
+        if (Math.abs(normX) > 0.4 || Math.abs(normY) > 0.4) {
+          if (Math.abs(normY) >= Math.abs(normX)) {
+            dir = normY > 0 ? 'FORWARD' : 'BACKWARD';
+          } else {
+            dir = normX > 0 ? 'RIGHT' : 'LEFT';
+          }
+        }
+        if (dir && dir !== activeDir) {
+          activeDir = dir;
+          sendDriveCommand(dir);
+        }
+      }
     }
 
     function endStick() {
-      if (!dragging) return;
       dragging = false;
       stick = { x: center.x, y: center.y };
       draw();
-      const joyXEl = document.getElementById('joyX');
-      const joyYEl = document.getElementById('joyY');
-      if (joyXEl) joyXEl.textContent = '0.00';
-      if (joyYEl) joyYEl.textContent = '0.00';
-      if (lastCmd) {
-        lastCmd = null;
+      const joyX = document.getElementById('joyX');
+      const joyY = document.getElementById('joyY');
+      if (joyX) joyX.textContent = '0.00';
+      if (joyY) joyY.textContent = '0.00';
+      if (activeDir) {
+        activeDir = '';
         sendDriveCommand('STOP');
       }
     }
@@ -380,8 +386,8 @@
     window.addEventListener('mousemove', moveStick);
     window.addEventListener('mouseup', endStick);
 
-    canvas.addEventListener('touchstart', (e) => { dragging = true; moveStick(e); }, { passive: true });
-    window.addEventListener('touchmove', moveStick, { passive: true });
+    canvas.addEventListener('touchstart', (e) => { dragging = true; moveStick(e); });
+    window.addEventListener('touchmove', moveStick);
     window.addEventListener('touchend', endStick);
 
     draw();
