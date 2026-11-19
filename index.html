@@ -66,18 +66,6 @@
           </div>
         </div>
 
-  <!-- ================= TOAST CONTAINERS ================= -->
-  <div id="toastContainer" class="fixed bottom-5 right-5 z-50 flex flex-col space-y-2 pointer-events-none"></div>
-
-<!-- Librería MQTT -->
-<script src="https://unpkg.com/mqtt/dist/mqtt.min.js" defer></script>
-
-<!-- Servicio MQTT -->
-<script src="mqtt-service.js" defer></script>
-
-<!-- Aplicación principal -->
-<script src="app.js" defer></script>
-
         <div>
           <label class="block text-xs font-semibold uppercase tracking-wider text-slate-400 mb-2">Contraseña</label>
           <div class="relative">
@@ -784,6 +772,17 @@
     </div>
   </div>
 
+  <!-- ================= TOAST CONTAINERS ================= -->
+  <div id="toastContainer" class="fixed bottom-5 right-5 z-50 flex flex-col space-y-2 pointer-events-none"></div>
+
+  <!-- Librerías externas -->
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <script src="https://unpkg.com/mqtt/dist/mqtt.min.js"></script>
+
+  <!-- Scripts del proyecto -->
+  <script src="mqtt-service.js"></script>
+  <script src="app.js"></script>
 
 </body>
 </html>
