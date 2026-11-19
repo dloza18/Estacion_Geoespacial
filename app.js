@@ -298,8 +298,10 @@
     if (!canvas) return;
     const ctx = canvas.getContext('2d');
     let dragging = false;
+    let lastCmd = null;
     const center = { x: canvas.width / 2, y: canvas.height / 2 };
     const maxRadius = 70;
+    const deadzone = 0.35;
     let stick = { x: center.x, y: center.y };
 
     function draw() {
@@ -310,17 +312,78 @@
       ctx.fillStyle = '#10b981'; ctx.fill();
     }
 
-    canvas.addEventListener('mousedown', () => { dragging = true; });
-    window.addEventListener('mouseup', () => { dragging = false; stick = { x: center.x, y: center.y }; draw(); });
-    window.addEventListener('mousemove', (e) => {
+    function emitJoystickCommand(normX, normY) {
+      if (!state.user || state.activeTab !== 'tab-control' || state.controlMode !== 'manual') return;
+
+      let cmd = null;
+      if (Math.hypot(normX, normY) >= deadzone) {
+        if (Math.abs(normY) >= Math.abs(normX)) {
+          cmd = normY > 0 ? 'FORWARD' : 'BACKWARD';
+        } else {
+          cmd = normX > 0 ? 'RIGHT' : 'LEFT';
+        }
+      }
+
+      if (cmd && cmd !== lastCmd) {
+        lastCmd = cmd;
+        sendDriveCommand(cmd);
+      }
+    }
+
+    function moveStick(evt) {
       if (!dragging) return;
       const rect = canvas.getBoundingClientRect();
-      const dx = e.clientX - rect.left - center.x;
-      const dy = e.clientY - rect.top - center.y;
+      const clientX = evt.touches ? evt.touches[0].clientX : evt.clientX;
+      const clientY = evt.touches ? evt.touches[0].clientY : evt.clientY;
+
+      const dx = clientX - rect.left - center.x;
+      const dy = clientY - rect.top - center.y;
       const dist = Math.hypot(dx, dy);
-      if (dist < maxRadius) { stick.x = center.x + dx; stick.y = center.y + dy; }
+
+      if (dist < maxRadius) {
+        stick.x = center.x + dx;
+        stick.y = center.y + dy;
+      } else {
+        const angle = Math.atan2(dy, dx);
+        stick.x = center.x + Math.cos(angle) * maxRadius;
+        stick.y = center.y + Math.sin(angle) * maxRadius;
+      }
+
       draw();
-    });
+
+      const normX = +((stick.x - center.x) / maxRadius).toFixed(2);
+      const normY = +(-(stick.y - center.y) / maxRadius).toFixed(2);
+      const joyXEl = document.getElementById('joyX');
+      const joyYEl = document.getElementById('joyY');
+      if (joyXEl) joyXEl.textContent = normX;
+      if (joyYEl) joyYEl.textContent = normY;
+
+      emitJoystickCommand(normX, normY);
+    }
+
+    function endStick() {
+      if (!dragging) return;
+      dragging = false;
+      stick = { x: center.x, y: center.y };
+      draw();
+      const joyXEl = document.getElementById('joyX');
+      const joyYEl = document.getElementById('joyY');
+      if (joyXEl) joyXEl.textContent = '0.00';
+      if (joyYEl) joyYEl.textContent = '0.00';
+      if (lastCmd) {
+        lastCmd = null;
+        sendDriveCommand('STOP');
+      }
+    }
+
+    canvas.addEventListener('mousedown', (e) => { dragging = true; moveStick(e); });
+    window.addEventListener('mousemove', moveStick);
+    window.addEventListener('mouseup', endStick);
+
+    canvas.addEventListener('touchstart', (e) => { dragging = true; moveStick(e); }, { passive: true });
+    window.addEventListener('touchmove', moveStick, { passive: true });
+    window.addEventListener('touchend', endStick);
+
     draw();
   }
 
