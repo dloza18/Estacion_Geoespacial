@@ -77,15 +77,6 @@
           </div>
         </div>
 
-                  <!-- Librería de MQTT.js -->
-  <script src="https://unpkg.com/mqtt/dist/mqtt.min.js"></script>
-  
-  <!-- Servicio MQTT Independiente -->
-  <script src="mqtt-service.js"></script>
-  
-  <!-- Lógica Principal de la SPA -->
-  <script src="app.js"></script>
-
         <div>
           <label class="block text-xs font-semibold uppercase tracking-wider text-slate-400 mb-2">Rol de Operación</label>
           <div class="grid grid-cols-2 gap-3">
@@ -784,11 +775,13 @@
   <!-- ================= TOAST CONTAINERS ================= -->
   <div id="toastContainer" class="fixed bottom-5 right-5 z-50 flex flex-col space-y-2 pointer-events-none"></div>
 
-  <!-- Leaflet.js -->
-  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-  <!-- Chart.js -->
-  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-  <!-- App JS Externo -->
-  <script src="app.js"></script>
+<!-- Librería MQTT -->
+<script src="https://unpkg.com/mqtt/dist/mqtt.min.js" defer></script>
+
+<!-- Servicio MQTT -->
+<script src="mqtt-service.js" defer></script>
+
+<!-- Aplicación principal -->
+<script src="app.js" defer></script>
 </body>
 </html>
