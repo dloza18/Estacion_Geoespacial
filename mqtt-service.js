@@ -10,7 +10,7 @@
   let client = null;
 
   // Broker MQTT público
-  const BROKER_URL = 'wss://broker.emqx.io:8084/mqtt';
+  const BROKER_URL = 'wss://broker.emqx.io:1883/mqtt';
 
   // Tópico de comunicación
   const TOPIC_CMD = 'ucol/telematica/geostation/command';
